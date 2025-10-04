@@ -18,145 +18,130 @@ app.use(express.json());
 // Game state management
 const rooms = new Map();
 
-// Puzzle generator
-function generatePuzzle(stage) {
-  const puzzles = [
-    {
-      stage: 1,
-      hint: "色のパターンを見つけてください。赤→青→緑の順番です。",
-      correctSequence: ['red', 'blue', 'green'],
-      options: ['red', 'blue', 'green', 'yellow']
-    },
-    {
-      stage: 2,
-      hint: "数字の和を計算してください。3 + 5 + 2 = 10です。正しい答えは10です。",
-      correctAnswer: 10,
-      options: [8, 9, 10, 11]
-    },
-    {
-      stage: 3,
-      hint: "左から右へ、矢印の順番は：→ ↑ ← ↓",
-      correctSequence: ['right', 'up', 'left', 'down'],
-      options: ['up', 'down', 'left', 'right']
-    }
-  ];
+// Quiz questions - Hacker/Linux command themed
+const quizQuestions = [
+  {
+    id: 1,
+    question: "Linuxで現在のディレクトリのパスを表示するコマンドは？",
+    options: ['pwd', 'cd', 'ls', 'mkdir'],
+    correctAnswer: 'pwd',
+    explanation: "pwdコマンド（Print Working Directory）は現在のディレクトリの完全パスを表示します。"
+  },
+  {
+    id: 2,
+    question: "ファイルの権限を変更するコマンドは？",
+    options: ['chown', 'chmod', 'chgrp', 'ls -l'],
+    correctAnswer: 'chmod',
+    explanation: "chmodコマンド（Change Mode）はファイルやディレクトリのアクセス権限を変更します。"
+  },
+  {
+    id: 3,
+    question: "実行中のプロセスを確認するコマンドは？",
+    options: ['ps', 'kill', 'top', 'htop'],
+    correctAnswer: 'ps',
+    explanation: "psコマンド（Process Status）は現在実行中のプロセスの情報を表示します。"
+  },
+  {
+    id: 4,
+    question: "ファイルの内容を表示するコマンドは？",
+    options: ['cat', 'dog', 'view', 'show'],
+    correctAnswer: 'cat',
+    explanation: "catコマンド（concatenate）はファイルの内容を標準出力に表示します。"
+  },
+  {
+    id: 5,
+    question: "スーパーユーザー権限でコマンドを実行するには？",
+    options: ['sudo', 'su', 'root', 'admin'],
+    correctAnswer: 'sudo',
+    explanation: "sudoコマンド（SuperUser DO）は一時的に管理者権限でコマンドを実行できます。"
+  }
+];
 
-  return puzzles[stage - 1] || puzzles[0];
+// Get question by ID
+function getQuestion(questionId) {
+  return quizQuestions.find(q => q.id === questionId) || quizQuestions[0];
+}
+
+// Get total number of questions
+function getTotalQuestions() {
+  return quizQuestions.length;
 }
 
 // Room management
 io.on('connection', (socket) => {
   console.log('New client connected:', socket.id);
 
-  socket.on('createRoom', () => {
+  socket.on('startGame', () => {
     const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const firstQuestion = getQuestion(1);
+    
     rooms.set(roomId, {
       id: roomId,
-      players: [{ id: socket.id, role: 'A' }],
-      stage: 1,
-      puzzle: generatePuzzle(1),
-      currentProgress: [],
-      isGameStarted: false,
-      isCleared: false
+      players: [{ id: socket.id }],
+      currentQuestionId: 1,
+      question: firstQuestion,
+      isGameStarted: true,
+      totalQuestions: getTotalQuestions()
     });
 
     socket.join(roomId);
-    socket.emit('roomCreated', { roomId, role: 'A' });
-    console.log(`Room created: ${roomId}`);
+    socket.emit('gameStarted', { 
+      roomId, 
+      question: firstQuestion,
+      currentQuestionId: 1,
+      totalQuestions: getTotalQuestions()
+    });
+    console.log(`Game started: ${roomId}`);
   });
 
-  socket.on('joinRoom', (roomId) => {
-    const room = rooms.get(roomId);
-
-    if (!room) {
-      socket.emit('error', { message: '部屋が見つかりません' });
-      return;
-    }
-
-    if (room.players.length >= 2) {
-      socket.emit('error', { message: '部屋が満員です' });
-      return;
-    }
-
-    const role = room.players.length === 0 ? 'A' : 'B';
-    room.players.push({ id: socket.id, role });
-    socket.join(roomId);
-
-    socket.emit('roomJoined', { roomId, role });
-
-    if (room.players.length === 2) {
-      room.isGameStarted = true;
-      io.to(roomId).emit('gameStart', {
-        stage: room.stage,
-        puzzle: room.puzzle
-      });
-    }
-
-    console.log(`Player joined room ${roomId} as Player ${role}`);
-  });
-
-  socket.on('submitAction', ({ roomId, action }) => {
+  socket.on('submitAnswer', ({ roomId, answer }) => {
     const room = rooms.get(roomId);
 
     if (!room || !room.isGameStarted) {
       return;
     }
 
-    const puzzle = room.puzzle;
-    let isCorrect = false;
+    const question = room.question;
+    const isCorrect = answer === question.correctAnswer;
 
-    // Check if action is correct based on puzzle type
-    if (puzzle.correctSequence) {
-      room.currentProgress.push(action);
-      
-      if (room.currentProgress.length === puzzle.correctSequence.length) {
-        isCorrect = JSON.stringify(room.currentProgress) === JSON.stringify(puzzle.correctSequence);
-        
-        if (isCorrect) {
-          room.isCleared = true;
-          io.to(roomId).emit('stageClear', { stage: room.stage });
-        } else {
-          room.currentProgress = [];
-          io.to(roomId).emit('incorrect', { message: '不正解です。もう一度試してください。' });
-        }
-      }
-    } else if (puzzle.correctAnswer !== undefined) {
-      isCorrect = action === puzzle.correctAnswer;
-      
-      if (isCorrect) {
-        room.isCleared = true;
-        io.to(roomId).emit('stageClear', { stage: room.stage });
-      } else {
-        io.to(roomId).emit('incorrect', { message: '不正解です。もう一度試してください。' });
-      }
+    if (isCorrect) {
+      io.to(roomId).emit('answerResult', { 
+        isCorrect: true, 
+        explanation: question.explanation,
+        currentQuestionId: room.currentQuestionId
+      });
+    } else {
+      io.to(roomId).emit('answerResult', { 
+        isCorrect: false, 
+        message: '不正解です。もう一度試してください。'
+      });
     }
-
-    io.to(roomId).emit('progressUpdate', { 
-      progress: room.currentProgress,
-      isCleared: room.isCleared
-    });
   });
 
-  socket.on('nextStage', ({ roomId }) => {
+  socket.on('nextQuestion', ({ roomId }) => {
     const room = rooms.get(roomId);
 
     if (!room) {
       return;
     }
 
-    room.stage += 1;
-    room.currentProgress = [];
-    room.isCleared = false;
+    room.currentQuestionId += 1;
 
-    if (room.stage > 3) {
-      io.to(roomId).emit('gameComplete', { message: 'すべてのステージをクリアしました！' });
+    if (room.currentQuestionId > getTotalQuestions()) {
+      io.to(roomId).emit('gameComplete', { 
+        message: 'すべての問題をクリアしました！おめでとうございます！',
+        totalQuestions: getTotalQuestions()
+      });
       return;
     }
 
-    room.puzzle = generatePuzzle(room.stage);
-    io.to(roomId).emit('gameStart', {
-      stage: room.stage,
-      puzzle: room.puzzle
+    const nextQuestion = getQuestion(room.currentQuestionId);
+    room.question = nextQuestion;
+    
+    io.to(roomId).emit('questionUpdate', {
+      question: nextQuestion,
+      currentQuestionId: room.currentQuestionId,
+      totalQuestions: getTotalQuestions()
     });
   });
 
@@ -168,14 +153,8 @@ io.on('connection', (socket) => {
       const playerIndex = room.players.findIndex(p => p.id === socket.id);
       
       if (playerIndex !== -1) {
-        room.players.splice(playerIndex, 1);
-        
-        if (room.players.length === 0) {
-          rooms.delete(roomId);
-          console.log(`Room ${roomId} deleted`);
-        } else {
-          io.to(roomId).emit('playerLeft', { message: 'プレイヤーが退出しました' });
-        }
+        rooms.delete(roomId);
+        console.log(`Room ${roomId} deleted`);
         break;
       }
     }
