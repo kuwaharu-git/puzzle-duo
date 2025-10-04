@@ -19,6 +19,7 @@ export default function Game() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [isComplete, setIsComplete] = useState(false);
+  const [nextRole, setNextRole] = useState(null);
 
   useEffect(() => {
     const newSocket = io(BACKEND_URL);
@@ -36,23 +37,26 @@ export default function Game() {
       setMessage('部屋に参加しました。');
     });
 
-    newSocket.on('gameStart', ({ stage, puzzle }) => {
+    newSocket.on('gameStart', ({ stage, puzzle, nextRole: incomingNextRole }) => {
       setGameStarted(true);
       setStage(stage);
       setPuzzle(puzzle);
       setProgress([]);
       setIsCleared(false);
       setMessage('');
+      setNextRole(incomingNextRole ?? (puzzle?.sequence?.[0]?.role || null));
     });
 
-    newSocket.on('progressUpdate', ({ progress, isCleared }) => {
-      setProgress(progress);
+    newSocket.on('progressUpdate', ({ progress, isCleared, nextRole }) => {
+      setProgress(progress || []);
       setIsCleared(isCleared);
+      setNextRole(nextRole ?? null);
     });
 
     newSocket.on('stageClear', ({ stage, message }) => {
       setIsCleared(true);
       setMessage(message || `ステージ${stage}クリア！`);
+      setNextRole(null);
     });
 
     newSocket.on('incorrect', ({ message }) => {
@@ -63,6 +67,7 @@ export default function Game() {
     newSocket.on('gameComplete', ({ message }) => {
       setIsComplete(true);
       setMessage(message);
+      setNextRole(null);
     });
 
     newSocket.on('playerLeft', ({ message }) => {
@@ -94,7 +99,7 @@ export default function Game() {
 
   const handleAction = (action) => {
     if (socket && roomId) {
-      socket.emit('submitAction', { roomId, action });
+      socket.emit('submitAction', { roomId, action, role });
     }
   };
 
@@ -180,29 +185,26 @@ export default function Game() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {role === 'A' ? (
-            <PlayerAView puzzle={puzzle} />
-          ) : (
-            <PlayerBView 
-              puzzle={puzzle} 
-              onAction={handleAction} 
-              progress={progress}
-              isCleared={isCleared}
-            />
-          )}
-          
-          {role === 'B' ? (
-            <PlayerAView puzzle={puzzle} isObserver={true} />
-          ) : (
-            <PlayerBView 
-              puzzle={puzzle} 
-              onAction={handleAction} 
-              progress={progress}
-              isCleared={isCleared}
-              isObserver={true}
-            />
-          )}
+        <div className="space-y-4">
+            <PuzzleBriefing puzzle={puzzle} progress={progress} nextRole={nextRole} />
+
+            <div className="grid grid-cols-1 gap-4">
+              {role === 'A' ? (
+                <PlayerAView
+                  puzzle={puzzle}
+                  onAction={handleAction}
+                  nextRole={nextRole}
+                  isCleared={isCleared}
+                />
+              ) : (
+                <PlayerBView
+                  puzzle={puzzle}
+                  onAction={handleAction}
+                  nextRole={nextRole}
+                  isCleared={isCleared}
+                />
+              )}
+            </div>
         </div>
 
         {isCleared && (
@@ -221,106 +223,158 @@ export default function Game() {
   );
 }
 
-function PlayerAView({ puzzle, isObserver = false }) {
+function PuzzleBriefing({ puzzle, progress, nextRole }) {
+  if (!puzzle) {
+    return null;
+  }
+
   return (
-    <div className={`bg-white rounded-lg shadow-xl p-6 ${isObserver ? 'opacity-50' : ''}`}>
-      <h2 className="text-xl font-bold mb-4 text-purple-600">
-        {isObserver ? 'Player A の画面（参考）' : 'あなたはPlayer A - ヒント役'}
-      </h2>
-      <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4">
-        <h3 className="font-bold text-yellow-800 mb-2">💡 ヒント:</h3>
-        <p className="text-gray-700 whitespace-pre-line">{puzzle?.hint}</p>
-      </div>
-      <div className="mt-4 bg-blue-50 rounded-lg p-4">
-        <p className="text-sm text-blue-800">
-          Player Bに口頭でヒントを伝えて、正しいコマンドを実行してもらいましょう！
-        </p>
+    <div className="bg-white rounded-lg shadow-2xl p-6 mb-4">
+      <div className="flex flex-col gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-gray-800">{puzzle.title || '作戦概要'}</h2>
+          {puzzle.narrative && (
+            <p className="mt-2 text-sm text-gray-600 whitespace-pre-line">{puzzle.narrative}</p>
+          )}
+        </div>
+
+        <CommandProgress progress={progress} nextRole={nextRole} />
       </div>
     </div>
   );
 }
 
-function PlayerBView({ puzzle, onAction, progress, isCleared, isObserver = false }) {
-  if (puzzle?.correctSequence) {
-    return (
-      <div className={`bg-white rounded-lg shadow-xl p-6 ${isObserver ? 'opacity-50' : ''}`}>
-        <h2 className="text-xl font-bold mb-4 text-pink-600">
-          {isObserver ? 'Player B の画面（参考）' : 'あなたはPlayer B - 操作役'}
-        </h2>
-        
-        <div className="mb-4">
-          <h3 className="font-semibold text-gray-700 mb-2">現在の入力:</h3>
-          <div className="flex gap-2 flex-wrap min-h-[40px] bg-gray-50 rounded p-2">
-            {progress.map((item, index) => (
-              <span key={index} className="px-3 py-1 bg-blue-500 text-white rounded">
-                {item}
-              </span>
-            ))}
-          </div>
-        </div>
+function CommandProgress({ progress = [], nextRole }) {
+  const hasSteps = Array.isArray(progress) && progress.length > 0;
+  const preview = hasSteps ? progress.map((step) => step.value).join(' ') : '';
 
-        <div className="grid grid-cols-2 gap-2">
-          {puzzle.options.map((option) => (
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-gray-700 mb-2">構築中のコマンド</h3>
+      <div className="flex flex-wrap gap-2 min-h-[40px] bg-gray-50 rounded-lg p-3 border border-gray-100">
+        {hasSteps ? (
+          progress.map((step, index) => (
+            <span
+              key={`${step.value}-${index}`}
+              className={`px-3 py-1 rounded-full text-white text-sm font-semibold ${
+                step.role === 'A' ? 'bg-purple-500' : 'bg-pink-500'
+              }`}
+            >
+              {step.value}
+            </span>
+          ))
+        ) : (
+          <span className="text-sm text-gray-400">まだ入力がありません</span>
+        )}
+      </div>
+      {hasSteps && (
+        <p className="mt-2 text-xs text-gray-500 font-mono break-words">{preview}</p>
+      )}
+      <p className="mt-3 text-sm font-medium text-gray-600">
+        {nextRole
+          ? `次の手番：Player ${nextRole}`
+          : '全ステップ完了！ステージクリアを確認しましょう。'}
+      </p>
+    </div>
+  );
+}
+
+function PlayerPanel({ role, data, onAction, nextRole, isCleared }) {
+  if (!data) {
+    return (
+      <div className="bg-white rounded-lg shadow-xl p-6">
+        <p className="text-sm text-gray-500">このロールの情報を読み込んでいます...</p>
+      </div>
+    );
+  }
+
+  const isYourTurn = nextRole === role && !isCleared;
+  const accentText = role === 'A' ? 'text-purple-600' : 'text-pink-600';
+  const accentBadge = role === 'A' ? 'bg-purple-100 text-purple-800' : 'bg-pink-100 text-pink-800';
+  const buttonAccent = role === 'A' ? 'bg-purple-500 hover:bg-purple-600' : 'bg-pink-500 hover:bg-pink-600';
+  const buttonDisabled = 'bg-gray-300 cursor-not-allowed text-gray-600';
+  const indicatorAccent = role === 'A' ? 'bg-purple-500' : 'bg-pink-500';
+
+  return (
+    <div className="bg-white rounded-lg shadow-xl p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className={`text-xl font-bold ${accentText}`}>
+          {data.roleLabel || `Player ${role}`}
+        </h2>
+        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${accentBadge}`}>
+          Player {role}
+        </span>
+      </div>
+
+      {data.hint && (
+        <div className="bg-gradient-to-br from-gray-50 to-white border border-gray-200 rounded-lg p-4 mb-3">
+          <h3 className="text-sm font-semibold text-gray-700 mb-1">作戦ヒント</h3>
+          <p className="text-sm text-gray-600 whitespace-pre-line">{data.hint}</p>
+        </div>
+      )}
+
+      {data.intel && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+          <h3 className="text-sm font-semibold text-blue-800 mb-1">保有情報</h3>
+          <p className="text-sm text-blue-700 whitespace-pre-line">{data.intel}</p>
+        </div>
+      )}
+
+      {data.options && data.options.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+          {data.options.map((option) => (
             <button
-              key={option}
-              onClick={() => !isObserver && !isCleared && onAction(option)}
-              disabled={isObserver || isCleared}
+              key={option.id || option.value}
+              onClick={() => onAction && isYourTurn && onAction(option.value)}
+              disabled={!isYourTurn || isCleared}
               className={`py-3 px-4 rounded-lg font-semibold transition duration-200 ${
-                isObserver || isCleared
-                  ? 'bg-gray-300 cursor-not-allowed'
-                  : 'bg-pink-500 hover:bg-pink-600 text-white transform hover:scale-105'
+                isYourTurn && !isCleared
+                  ? `${buttonAccent} text-white transform hover:scale-105`
+                  : buttonDisabled
               }`}
             >
-              {option}
+              {option.label || option.value}
             </button>
           ))}
         </div>
-        
-        {!isObserver && (
-          <div className="mt-4 bg-pink-50 rounded-lg p-4">
-            <p className="text-sm text-pink-800">
-              Player Aのヒントを聞いて、正しい順番でボタンを押してください！
-            </p>
-          </div>
-        )}
-      </div>
-    );
-  }
+      ) : (
+        <p className="text-sm text-gray-500 mb-4">選択肢はありません。相談して次の手を決めましょう。</p>
+      )}
 
-  if (puzzle?.correctAnswer !== undefined) {
-    return (
-      <div className={`bg-white rounded-lg shadow-xl p-6 ${isObserver ? 'opacity-50' : ''}`}>
-        <h2 className="text-xl font-bold mb-4 text-pink-600">
-          {isObserver ? 'Player B の画面（参考）' : 'あなたはPlayer B - 操作役'}
-        </h2>
-        
-        <div className="space-y-2">
-          {puzzle.options.map((option, index) => (
-            <button
-              key={option}
-              onClick={() => !isObserver && !isCleared && onAction(option)}
-              disabled={isObserver || isCleared}
-              className={`w-full text-left py-3 px-4 rounded-lg font-mono text-sm transition duration-200 ${
-                isObserver || isCleared
-                  ? 'bg-gray-300 cursor-not-allowed text-gray-600'
-                  : 'bg-pink-500 hover:bg-pink-600 text-white transform hover:scale-105'
-              }`}
-            >
-              <span className="font-bold">{String.fromCharCode(65 + index)}:</span> {option}
-            </button>
-          ))}
-        </div>
-        
-        {!isObserver && (
-          <div className="mt-4 bg-pink-50 rounded-lg p-4">
-            <p className="text-sm text-pink-800">
-              Player Aのヒントを聞いて、正しいコマンドを選んでください！
-            </p>
-          </div>
-        )}
+      <div className="flex items-center gap-2 text-sm text-gray-600">
+        <span className={`w-2 h-2 rounded-full ${indicatorAccent}`} />
+        {isCleared
+          ? 'ステージクリア！次の指示を待ちましょう。'
+          : isYourTurn
+            ? 'あなたの番です。最適な選択肢を選びましょう。'
+            : nextRole
+              ? `Player ${nextRole} の入力を待っています。`
+              : '作戦状況を確認中...'}
       </div>
-    );
-  }
+    </div>
+  );
+}
 
-  return null;
+function PlayerAView({ puzzle, onAction, nextRole, isCleared }) {
+  return (
+    <PlayerPanel
+      role="A"
+      data={puzzle?.playerA}
+      onAction={onAction}
+      nextRole={nextRole}
+      isCleared={isCleared}
+    />
+  );
+}
+
+function PlayerBView({ puzzle, onAction, nextRole, isCleared }) {
+  return (
+    <PlayerPanel
+      role="B"
+      data={puzzle?.playerB}
+      onAction={onAction}
+      nextRole={nextRole}
+      isCleared={isCleared}
+    />
+  );
 }

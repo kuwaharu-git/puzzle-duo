@@ -24,36 +24,117 @@ function generatePuzzle(stage) {
   const puzzles = [
     {
       stage: 1,
-      hint: "重要なログファイルは /var/log の中にあります。\n名前には \"secret\" が含まれています。",
-      correctAnswer: 'find /var/log -name "*secret*"',
-      options: [
-        'find /home -name "*secret*"',
-        'find /var/log -name "*secret*"',
-        'ls /var/log',
-        'grep secret /var/log'
-      ]
+      type: 'sequence',
+      title: 'シークレットログ追跡作戦',
+      narrative: '施設のどこかに重要なログが隠されています。あなたたちの情報を組み合わせて正しいコマンドを構築しましょう。',
+      sequence: [
+        { role: 'A', value: 'find' },
+        { role: 'B', value: '/var/log' },
+        { role: 'A', value: '-name' },
+        { role: 'B', value: '"*secret*"' }
+      ],
+      playerA: {
+        roleLabel: 'Player A / コマンドナビゲーター',
+        hint: '調査の主導権はあなたにあります。Bが持っているパス情報に合わせて適切なサブコマンドを選びましょう。',
+        intel: '対象のログは find コマンドで洗い出す必要があります。サブコマンド「-name」を使って部分一致検索ができるようです。',
+        options: [
+          { id: 'find', label: 'find', value: 'find' },
+          { id: 'grep', label: 'grep', value: 'grep' },
+          { id: 'ls', label: 'ls', value: 'ls' },
+          { id: '-name', label: '-name', value: '-name' },
+          { id: '-type', label: '-type', value: '-type' }
+        ]
+      },
+      playerB: {
+        roleLabel: 'Player B / パスナビゲーター',
+        hint: 'あなたは環境側の情報を握っています。Aが指示するタイミングに合わせて正しい経路やキーワードを差し込みましょう。',
+        intel: '怪しいログは /var/log 配下にあり、ファイル名に "secret" が含まれているようです。',
+        options: [
+          { id: '/var/log', label: '/var/log', value: '/var/log' },
+          { id: '/etc', label: '/etc', value: '/etc' },
+          { id: '"*secret*"', label: '"*secret*"', value: '"*secret*"' },
+          { id: '"*error*"', label: '"*error*"', value: '"*error*"' },
+          { id: '/home/user', label: '/home/user', value: '/home/user' }
+        ]
+      },
+      successMessage: 'TARGET FILE LOCATED 📂',
+      failureMessage: 'パラメータが噛み合いません。もう一度相談しながら組み立てましょう。'
     },
     {
       stage: 2,
-      hint: "システムで実行中のプロセスを確認する必要があります。\nプロセスの詳細情報も表示してください。",
-      correctAnswer: 'ps aux',
-      options: [
-        'ps',
-        'ps aux',
-        'top',
-        'ls -la'
-      ]
+      type: 'sequence',
+      title: 'プロセス監視ターミナル',
+      narrative: 'メモリを圧迫しているプロセスを早急に特定する必要があります。役割分担しながら最適なコマンドラインを構築してください。',
+      sequence: [
+        { role: 'A', value: 'ps' },
+        { role: 'B', value: 'aux' },
+        { role: 'A', value: '--sort=-%mem' },
+        { role: 'B', value: '| head -n 5' }
+      ],
+      playerA: {
+        roleLabel: 'Player A / オプション解析班',
+        hint: 'プロセス情報を詳細に取得し、メモリ使用量で並び替える手段を持っています。',
+        intel: 'ps コマンドのフラグやソートオプションに詳しいのはあなたです。Bのシェル操作と連携して上位5件に絞り込みましょう。',
+        options: [
+          { id: 'ps', label: 'ps', value: 'ps' },
+          { id: '--sort=-%mem', label: '--sort=-%mem', value: '--sort=-%mem' },
+          { id: '--sort=pid', label: '--sort=pid', value: '--sort=pid' },
+          { id: '-ef', label: '-ef', value: '-ef' },
+          { id: 'watch', label: 'watch', value: 'watch' }
+        ]
+      },
+      playerB: {
+        roleLabel: 'Player B / シェル統制班',
+        hint: 'シェル構文とパイプライン制御に長けています。Aが提示したコマンドを補完して、必要な情報だけを抜き出しましょう。',
+        intel: 'プロセスを広く取得するには aux オプションが必要です。さらに head コマンドで出力を圧縮しましょう。',
+        options: [
+          { id: 'aux', label: 'aux', value: 'aux' },
+          { id: '-A', label: '-A', value: '-A' },
+          { id: '| head -n 5', label: '| head -n 5', value: '| head -n 5' },
+          { id: '| tail -n 5', label: '| tail -n 5', value: '| tail -n 5' },
+          { id: '| grep ssh', label: '| grep ssh', value: '| grep ssh' }
+        ]
+      },
+      successMessage: 'HIGH USAGE PROCESSES IDENTIFIED ✅',
+      failureMessage: '監視コマンドがうまく連結できませんでした。役割を確認して組み直しましょう。'
     },
     {
       stage: 3,
-      hint: "ファイル「config.txt」の所有者を user1 に変更してください。\nchown コマンドを使用します。",
-      correctAnswer: 'chown user1 config.txt',
-      options: [
-        'chmod user1 config.txt',
-        'chown user1 config.txt',
-        'chgrp user1 config.txt',
-        'chown config.txt user1'
-      ]
+      type: 'sequence',
+      title: '権限移譲プロトコル',
+      narrative: '重要ファイル「config.txt」のオーナー権限をユーザー user1 に移譲します。互いの権限情報を持ち寄りましょう。',
+      sequence: [
+        { role: 'A', value: 'chown' },
+        { role: 'B', value: 'user1' },
+        { role: 'A', value: ':' },
+        { role: 'B', value: 'config.txt' }
+      ],
+      playerA: {
+        roleLabel: 'Player A / 権限管理オペレーター',
+        hint: '所有者変更コマンドの使い方に精通しています。書式を崩さずに引数を指示しましょう。',
+        intel: 'コマンドは chown を使い、必要であればコロンでグループ指定もできます。',
+        options: [
+          { id: 'chown', label: 'chown', value: 'chown' },
+          { id: 'chmod', label: 'chmod', value: 'chmod' },
+          { id: ':', label: ': (区切り)', value: ':' },
+          { id: '.', label: '. (カレント)', value: '.' },
+          { id: '-R', label: '-R', value: '-R' }
+        ]
+      },
+      playerB: {
+        roleLabel: 'Player B / 対象ファイル管理官',
+        hint: 'ユーザーとファイルの実情を把握しています。Aの指示に合わせて正しい対象を投入しましょう。',
+        intel: '新しい所有者は user1 です。対象ファイルは config.txt。グループは変更不要です。',
+        options: [
+          { id: 'user1', label: 'user1', value: 'user1' },
+          { id: 'user2', label: 'user2', value: 'user2' },
+          { id: 'config.txt', label: 'config.txt', value: 'config.txt' },
+          { id: 'settings.yaml', label: 'settings.yaml', value: 'settings.yaml' },
+          { id: 'app.log', label: 'app.log', value: 'app.log' }
+        ]
+      },
+      successMessage: 'OWNERSHIP UPDATED 🔐',
+      failureMessage: '権限の指定を間違えました。指定順序と対象を再確認してください。'
     }
   ];
 
@@ -151,16 +232,19 @@ io.on('connection', (socket) => {
 
     if (room.players.length === 2) {
       room.isGameStarted = true;
+      room.currentProgress = [];
+      room.isCleared = false;
       io.to(roomId).emit('gameStart', {
         stage: room.stage,
-        puzzle: room.puzzle
+        puzzle: room.puzzle,
+        nextRole: room.puzzle.sequence?.[0]?.role || null
       });
     }
 
     console.log(`Player joined room ${roomId} as Player ${role}`);
   });
 
-  socket.on('submitAction', ({ roomId, action }) => {
+  socket.on('submitAction', ({ roomId, action, role }) => {
     const room = rooms.get(roomId);
 
     if (!room || !room.isGameStarted) {
@@ -168,40 +252,42 @@ io.on('connection', (socket) => {
     }
 
     const puzzle = room.puzzle;
-    let isCorrect = false;
+    if (puzzle.sequence) {
+      const currentIndex = room.currentProgress.length;
+      const expectedStep = puzzle.sequence[currentIndex];
 
-    // Check if action is correct based on puzzle type
-    if (puzzle.correctSequence) {
-      room.currentProgress.push(action);
-      
-      if (room.currentProgress.length === puzzle.correctSequence.length) {
-        isCorrect = JSON.stringify(room.currentProgress) === JSON.stringify(puzzle.correctSequence);
-        
-        if (isCorrect) {
-          room.isCleared = true;
-          io.to(roomId).emit('stageClear', { stage: room.stage });
-        } else {
-          room.currentProgress = [];
-          io.to(roomId).emit('incorrect', { message: '不正解です。もう一度試してください。' });
-        }
+      if (!expectedStep) {
+        return;
       }
-    } else if (puzzle.correctAnswer !== undefined) {
-      isCorrect = action === puzzle.correctAnswer;
-      
-      if (isCorrect) {
-        room.isCleared = true;
-        io.to(roomId).emit('stageClear', { 
-          stage: room.stage,
-          message: 'TARGET FILE LOCATED 📂'
-        });
+
+      if (expectedStep.role !== role) {
+        const turnMessage = expectedStep.role === 'A'
+          ? '今はPlayer Aの番です。相談して順番を確認しましょう。'
+          : '今はPlayer Bの番です。相談して順番を確認しましょう。';
+        io.to(roomId).emit('incorrect', { message: turnMessage });
+      } else if (expectedStep.value === action) {
+        room.currentProgress.push({ role, value: action });
+
+        if (room.currentProgress.length === puzzle.sequence.length) {
+          room.isCleared = true;
+          io.to(roomId).emit('stageClear', { 
+            stage: room.stage,
+            message: puzzle.successMessage || `ステージ${room.stage}クリア！`
+          });
+        }
       } else {
-        io.to(roomId).emit('incorrect', { message: 'SEARCH FAILED ❌' });
+        room.currentProgress = [];
+        room.isCleared = false;
+        io.to(roomId).emit('incorrect', { message: puzzle.failureMessage || '組み合わせが違います。最初から試してください。' });
       }
     }
 
+    const nextStep = puzzle.sequence?.[room.currentProgress.length] || null;
+
     io.to(roomId).emit('progressUpdate', { 
       progress: room.currentProgress,
-      isCleared: room.isCleared
+      isCleared: room.isCleared,
+      nextRole: nextStep ? nextStep.role : null
     });
   });
 
@@ -224,7 +310,8 @@ io.on('connection', (socket) => {
     room.puzzle = generatePuzzle(room.stage);
     io.to(roomId).emit('gameStart', {
       stage: room.stage,
-      puzzle: room.puzzle
+      puzzle: room.puzzle,
+      nextRole: room.puzzle.sequence?.[0]?.role || null
     });
   });
 
