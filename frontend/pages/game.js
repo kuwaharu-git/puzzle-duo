@@ -50,9 +50,9 @@ export default function Game() {
       setIsCleared(isCleared);
     });
 
-    newSocket.on('stageClear', ({ stage }) => {
+    newSocket.on('stageClear', ({ stage, message }) => {
       setIsCleared(true);
-      setMessage(`ステージ${stage}クリア！`);
+      setMessage(message || `ステージ${stage}クリア！`);
     });
 
     newSocket.on('incorrect', ({ message }) => {
@@ -229,11 +229,11 @@ function PlayerAView({ puzzle, isObserver = false }) {
       </h2>
       <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4">
         <h3 className="font-bold text-yellow-800 mb-2">💡 ヒント:</h3>
-        <p className="text-gray-700">{puzzle?.hint}</p>
+        <p className="text-gray-700 whitespace-pre-line">{puzzle?.hint}</p>
       </div>
       <div className="mt-4 bg-blue-50 rounded-lg p-4">
         <p className="text-sm text-blue-800">
-          Player Bに口頭でヒントを伝えて、正しい操作を行ってもらいましょう！
+          Player Bに口頭でヒントを伝えて、正しいコマンドを実行してもらいましょう！
         </p>
       </div>
     </div>
@@ -294,19 +294,19 @@ function PlayerBView({ puzzle, onAction, progress, isCleared, isObserver = false
           {isObserver ? 'Player B の画面（参考）' : 'あなたはPlayer B - 操作役'}
         </h2>
         
-        <div className="grid grid-cols-2 gap-2">
-          {puzzle.options.map((option) => (
+        <div className="space-y-2">
+          {puzzle.options.map((option, index) => (
             <button
               key={option}
               onClick={() => !isObserver && !isCleared && onAction(option)}
               disabled={isObserver || isCleared}
-              className={`py-3 px-4 rounded-lg font-semibold transition duration-200 ${
+              className={`w-full text-left py-3 px-4 rounded-lg font-mono text-sm transition duration-200 ${
                 isObserver || isCleared
-                  ? 'bg-gray-300 cursor-not-allowed'
+                  ? 'bg-gray-300 cursor-not-allowed text-gray-600'
                   : 'bg-pink-500 hover:bg-pink-600 text-white transform hover:scale-105'
               }`}
             >
-              {option}
+              <span className="font-bold">{String.fromCharCode(65 + index)}:</span> {option}
             </button>
           ))}
         </div>
@@ -314,7 +314,7 @@ function PlayerBView({ puzzle, onAction, progress, isCleared, isObserver = false
         {!isObserver && (
           <div className="mt-4 bg-pink-50 rounded-lg p-4">
             <p className="text-sm text-pink-800">
-              Player Aのヒントを聞いて、正しい答えを選んでください！
+              Player Aのヒントを聞いて、正しいコマンドを選んでください！
             </p>
           </div>
         )}

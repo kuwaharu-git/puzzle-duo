@@ -19,26 +19,41 @@ app.use(express.json());
 const rooms = new Map();
 const quizSessions = new Map();
 
-// Puzzle generator for cooperative mode
+// Puzzle generator for cooperative mode - Linux command themed
 function generatePuzzle(stage) {
   const puzzles = [
     {
       stage: 1,
-      hint: "色のパターンを見つけてください。赤→青→緑の順番です。",
-      correctSequence: ['red', 'blue', 'green'],
-      options: ['red', 'blue', 'green', 'yellow']
+      hint: "重要なログファイルは /var/log の中にあります。\n名前には \"secret\" が含まれています。",
+      correctAnswer: 'find /var/log -name "*secret*"',
+      options: [
+        'find /home -name "*secret*"',
+        'find /var/log -name "*secret*"',
+        'ls /var/log',
+        'grep secret /var/log'
+      ]
     },
     {
       stage: 2,
-      hint: "数字の和を計算してください。3 + 5 + 2 = 10です。正しい答えは10です。",
-      correctAnswer: 10,
-      options: [8, 9, 10, 11]
+      hint: "システムで実行中のプロセスを確認する必要があります。\nプロセスの詳細情報も表示してください。",
+      correctAnswer: 'ps aux',
+      options: [
+        'ps',
+        'ps aux',
+        'top',
+        'ls -la'
+      ]
     },
     {
       stage: 3,
-      hint: "左から右へ、矢印の順番は：→ ↑ ← ↓",
-      correctSequence: ['right', 'up', 'left', 'down'],
-      options: ['up', 'down', 'left', 'right']
+      hint: "ファイル「config.txt」の所有者を user1 に変更してください。\nchown コマンドを使用します。",
+      correctAnswer: 'chown user1 config.txt',
+      options: [
+        'chmod user1 config.txt',
+        'chown user1 config.txt',
+        'chgrp user1 config.txt',
+        'chown config.txt user1'
+      ]
     }
   ];
 
@@ -175,9 +190,12 @@ io.on('connection', (socket) => {
       
       if (isCorrect) {
         room.isCleared = true;
-        io.to(roomId).emit('stageClear', { stage: room.stage });
+        io.to(roomId).emit('stageClear', { 
+          stage: room.stage,
+          message: 'TARGET FILE LOCATED 📂'
+        });
       } else {
-        io.to(roomId).emit('incorrect', { message: '不正解です。もう一度試してください。' });
+        io.to(roomId).emit('incorrect', { message: 'SEARCH FAILED ❌' });
       }
     }
 
